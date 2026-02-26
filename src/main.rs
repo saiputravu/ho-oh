@@ -1,7 +1,6 @@
 use std::ptr::NonNull;
 
 use dispatch2::DispatchData;
-use objc2::declare::ProtocolDecl;
 use objc2_foundation::NSString;
 use objc2_metal::*;
 
