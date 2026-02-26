@@ -1,4 +1,5 @@
 #include <metal_stdlib>
+
 using namespace metal;
 
 kernel void scale_tensor(device const float *in_data [[buffer(0)]],

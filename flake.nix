@@ -14,9 +14,9 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
-        darwinBuildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
-          pkgs.apple-sdk_15
-          pkgs.libiconv
+        darwinBuildInputs = with pkgs; lib.optionals stdenv.hostPlatform.isDarwin [
+          apple-sdk_15
+          libiconv
         ];
       in
       {
@@ -25,16 +25,16 @@
           version = "0.1.0";
           src = ./.;
           useFetchCargoVendor = true;
-          cargoHash = "";
+          cargoHash = "sha256-qjc5biy86qG/de+9QruscjPMbmIqm3mPI25kNJNCAsc=";
 
           buildInputs = darwinBuildInputs;
         };
 
         devShells.default = pkgs.mkShell {
-          buildInputs = [
-            pkgs.cargo
-            pkgs.rustc
-            pkgs.rust-analyzer
+          buildInputs = with pkgs;[
+            cargo
+            rustc
+            rust-analyzer
           ] ++ darwinBuildInputs;
         };
       }
