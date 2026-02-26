@@ -1,7 +1,7 @@
 use std::ptr::NonNull;
 
 use dispatch2::DispatchData;
-use objc2::{declare::ProtocolDecl, runtime::ProtocolObject};
+use objc2::runtime::ProtocolObject;
 use objc2_foundation::NSString;
 use objc2_metal::*;
 
@@ -95,6 +95,7 @@ fn main() {
         height: 1,
         depth: 1,
     };
+
     let threadgroup_size = MTLSize {
         width: pipeline.maxTotalThreadsPerThreadgroup().min(count as usize),
         height: 1,
@@ -111,9 +112,8 @@ fn main() {
     let output_ptr = output_buffer.contents().as_ptr() as *const f32;
 
     let output: Vec<f32>;
-    unsafe {
-    output = std::slice::from_raw_parts(output_ptr, count).to_vec();
-    }
+    unsafe { output = std::slice::from_raw_parts(output_ptr, count).to_vec(); }
+
     println!("input:  {:?}", input);
     println!("scale:  {}", scale);
     println!("output: {:?}", output);
