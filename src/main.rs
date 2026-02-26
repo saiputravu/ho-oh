@@ -1,6 +1,7 @@
 use std::ptr::NonNull;
 
 use dispatch2::DispatchData;
+use objc2::{declare::ProtocolDecl, runtime::ProtocolObject};
 use objc2_foundation::NSString;
 use objc2_metal::*;
 
@@ -39,32 +40,38 @@ fn main() {
     let count = input.len();
     let buffer_size = count * std::mem::size_of::<f32>();
 
-    // Create input buffer
+    // Declare buffers
+    let input_buffer: objc2::rc::Retained<ProtocolObject<dyn MTLBuffer>>;
+    let output_buffer: objc2::rc::Retained<ProtocolObject<dyn MTLBuffer>>;
+    let scale_buffer: objc2::rc::Retained<ProtocolObject<dyn MTLBuffer>>;
+
     unsafe {
-    let input_buffer =  device
+    input_buffer = device
         .newBufferWithBytes_length_options(
             NonNull::new(input.as_ptr() as *mut _).unwrap(),
             buffer_size,
             MTLResourceOptions::StorageModeShared,
         )
         .expect("failed to create input buffer");
+    };
 
-    // Create output buffer
-    let output_buffer = device
+    output_buffer = device
         .newBufferWithLength_options(
             buffer_size,
             MTLResourceOptions::StorageModeShared,
         )
         .expect("failed to create output buffer");
 
+    unsafe {
     // Create scale buffer
-    let scale_buffer = device
+    scale_buffer = device
         .newBufferWithBytes_length_options(
             NonNull::new(&scale as *const f32 as *mut _).unwrap(),
             std::mem::size_of::<f32>(),
             MTLResourceOptions::StorageModeShared,
         )
         .expect("failed to create scale buffer");
+    }
 
     // Encode and dispatch
     let command_buffer = command_queue
@@ -77,9 +84,11 @@ fn main() {
 
     encoder.setComputePipelineState(&pipeline);
 
+    unsafe {
     encoder.setBuffer_offset_atIndex(Some(&input_buffer), 0, 0);
     encoder.setBuffer_offset_atIndex(Some(&output_buffer), 0, 1);
     encoder.setBuffer_offset_atIndex(Some(&scale_buffer), 0, 2);
+    }
 
     let grid_size = MTLSize {
         width: count as usize,
@@ -100,10 +109,13 @@ fn main() {
 
     // Read back results
     let output_ptr = output_buffer.contents().as_ptr() as *const f32;
-    let output: Vec<f32> = std::slice::from_raw_parts(output_ptr, count).to_vec();
 
+    let output: Vec<f32>;
+    unsafe {
+    output = std::slice::from_raw_parts(output_ptr, count).to_vec();
+    }
     println!("input:  {:?}", input);
     println!("scale:  {}", scale);
     println!("output: {:?}", output);
-    }
+
 }
