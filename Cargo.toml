@@ -1,0 +1,11 @@
+[package]
+name = "ho-oh"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSString", "NSError"] }
+objc2-metal = "0.3"
+block2 = "0.6"
+dispatch2 = "0.3"
