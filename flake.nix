@@ -73,7 +73,10 @@
             cargo
             rustc
             rust-analyzer
+            rustfmt
             metalc
+
+            git-xet       # needed for some hf repos
           ] ++ darwinBuildInputs;
 
           shellHook = ''
