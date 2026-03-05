@@ -9,3 +9,5 @@ objc2-foundation = { version = "0.3", features = ["NSString", "NSError"] }
 objc2-metal = "0.3"
 block2 = "0.6"
 dispatch2 = "0.3"
+safetensors = "0.7.0"
+memmap2 = "0.9.10"

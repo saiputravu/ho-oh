@@ -1,9 +1,16 @@
+use memmap2::MmapOptions;
+use std::fs::File;
 use std::ptr::NonNull;
 
 use dispatch2::DispatchData;
 use objc2::runtime::ProtocolObject;
 use objc2_foundation::NSString;
 use objc2_metal::*;
+pub use safetensors::SafeTensors;
+pub use safetensors::serialize;
+
+mod embeddings;
+mod model;
 
 static KERNELS_METALLIB: &[u8] = include_bytes!("kernels/kernels.metallib");
 
@@ -20,13 +27,13 @@ fn main() {
 
     // Get the scale_tensor kernel function
     let function_name = NSString::from_str("scale_tensor");
-    let function = library
+    let scale_tensor = library
         .newFunctionWithName(&function_name)
         .expect("function 'scale_tensor' not found in metallib");
 
     // Create a compute pipeline state
     let pipeline = device
-        .newComputePipelineStateWithFunction_error(&function)
+        .newComputePipelineStateWithFunction_error(&scale_tensor)
         .expect("failed to create compute pipeline state");
 
     // Create a command queue
@@ -46,31 +53,28 @@ fn main() {
     let scale_buffer: objc2::rc::Retained<ProtocolObject<dyn MTLBuffer>>;
 
     unsafe {
-    input_buffer = device
-        .newBufferWithBytes_length_options(
-            NonNull::new(input.as_ptr() as *mut _).unwrap(),
-            buffer_size,
-            MTLResourceOptions::StorageModeShared,
-        )
-        .expect("failed to create input buffer");
+        input_buffer = device
+            .newBufferWithBytes_length_options(
+                NonNull::new(input.as_ptr() as *mut _).unwrap(),
+                buffer_size,
+                MTLResourceOptions::StorageModeShared,
+            )
+            .expect("failed to create input buffer");
     };
 
     output_buffer = device
-        .newBufferWithLength_options(
-            buffer_size,
-            MTLResourceOptions::StorageModeShared,
-        )
+        .newBufferWithLength_options(buffer_size, MTLResourceOptions::StorageModeShared)
         .expect("failed to create output buffer");
 
     unsafe {
-    // Create scale buffer
-    scale_buffer = device
-        .newBufferWithBytes_length_options(
-            NonNull::new(&scale as *const f32 as *mut _).unwrap(),
-            std::mem::size_of::<f32>(),
-            MTLResourceOptions::StorageModeShared,
-        )
-        .expect("failed to create scale buffer");
+        // Create scale buffer
+        scale_buffer = device
+            .newBufferWithBytes_length_options(
+                NonNull::new(&scale as *const f32 as *mut _).unwrap(),
+                std::mem::size_of::<f32>(),
+                MTLResourceOptions::StorageModeShared,
+            )
+            .expect("failed to create scale buffer");
     }
 
     // Encode and dispatch
@@ -85,9 +89,9 @@ fn main() {
     encoder.setComputePipelineState(&pipeline);
 
     unsafe {
-    encoder.setBuffer_offset_atIndex(Some(&input_buffer), 0, 0);
-    encoder.setBuffer_offset_atIndex(Some(&output_buffer), 0, 1);
-    encoder.setBuffer_offset_atIndex(Some(&scale_buffer), 0, 2);
+        encoder.setBuffer_offset_atIndex(Some(&input_buffer), 0, 0);
+        encoder.setBuffer_offset_atIndex(Some(&output_buffer), 0, 1);
+        encoder.setBuffer_offset_atIndex(Some(&scale_buffer), 0, 2);
     }
 
     let grid_size = MTLSize {
@@ -112,10 +116,22 @@ fn main() {
     let output_ptr = output_buffer.contents().as_ptr() as *const f32;
 
     let output: Vec<f32>;
-    unsafe { output = std::slice::from_raw_parts(output_ptr, count).to_vec(); }
+    unsafe {
+        output = std::slice::from_raw_parts(output_ptr, count).to_vec();
+    }
 
     println!("input:  {:?}", input);
     println!("scale:  {}", scale);
     println!("output: {:?}", output);
 
+    // Read safetensors.
+    let file = File::open("./models/LFM2.5-1.2B-Thinking/model.safetensors").unwrap();
+    let buffer = unsafe { MmapOptions::new().map(&file).unwrap() };
+    let tensors = SafeTensors::deserialize(&buffer).unwrap();
+    let names = tensors.names();
+    println!("{:?}", names);
+    let tensor = tensors
+        .tensor("model.layers.2.self_attn.k_proj.weight")
+        .unwrap();
+    println!("{:?}", tensor.shape())
 }
