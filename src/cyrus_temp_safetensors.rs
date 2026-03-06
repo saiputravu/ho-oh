@@ -3,7 +3,7 @@ use safetensors::SafeTensors;
 use std::fs::File;
 
 pub fn test() {
-    let modelpath = "../models/Qwen3-0.6B/model.safetensors";
+    let modelpath = "../models/TinyMistral-248M-v3/model.safetensors";
 
     let file = File::open(modelpath).unwrap();
 
@@ -14,5 +14,6 @@ pub fn test() {
     let tensor = tensors
         .tensor("model.layers.16.self_attn.k_norm.weight")
         .unwrap();
+
     println!("{:?}", tensor);
 }
