@@ -1,0 +1,6 @@
+[submodule "models/TinyMistral-248M-v3"]
+	path = models/TinyMistral-248M-v3
+	url = https://huggingface.co/M4-ai/TinyMistral-248M-v3
+[submodule "models/Qwen3-0.6B"]
+	path = models/Qwen3-0.6B
+	url = https://huggingface.co/Qwen/Qwen3-0.6B
