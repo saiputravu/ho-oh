@@ -1,6 +1,6 @@
 # thIEu
 
-**Th**e **I**nference **E**ngine (**Thiêu** - _Burn_ in Vietnamese)
+**Th**e **I**nference **E**ngine **U**nit (**Thiêu** - _Burn_ in Vietnamese)
 
 A GPU-accelerated inference engine for running LLMs on Apple Silicon, written in Rust with native Metal compute shaders.
 
@@ -14,11 +14,9 @@ thIEu is built from the ground up to run transformer model inference directly on
 
 ### What's implemented
 
-- **Metal GPU compute pipeline** — device setup, command queues, compute encoders, and kernel dispatch
+- **Metal GPU compute pipeline** — device setup, buffer management, compute encoding, and kernel dispatch
 - **Metal shader compilation** — custom `.metal` kernels compiled to `.metallib` via a Nix-managed build pipeline
 - **SafeTensors model loading** — memory-mapped file access for efficient weight loading from Hugging Face models
-- **Layer abstraction** — trait-based architecture (`Layer` trait with `new()` and `forward()`) for composable model components
-- **Rotary positional embeddings** — `RotaryEmbeddingLayer` for transformer attention
 
 ### Models
 
