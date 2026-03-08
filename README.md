@@ -1,5 +1,5 @@
-# impetus
-🐦‍🔥 the impetus to predict a token 🐦‍🔥
+# thIEu
+🐦‍🔥 **Th**e **I**nference **E**ngine (**Thiêu** - Burn in Vietnamese) 🐦‍🔥
 
 # Resources
 [Apple Metal GPU support](https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf)

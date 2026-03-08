@@ -1,5 +1,5 @@
 {
-  description = "Ho-Oh";
+  description = "Theiu";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
@@ -29,7 +29,7 @@
         '';
 
         metalKernels = pkgs.stdenv.mkDerivation {
-          pname = "ho-oh-kernels";
+          pname = "theiu-kernels";
           version = "0.1.0";
           src = ./src/kernels;
 
@@ -56,7 +56,7 @@
       in
       {
         packages.default = pkgs.rustPlatform.buildRustPackage {
-          pname = "ho-oh";
+          pname = "theiu";
           version = "0.1.0";
           src = ./.;
           cargoHash = "sha256-qjc5biy86qG/de+9QruscjPMbmIqm3mPI25kNJNCAsc=";
