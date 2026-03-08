@@ -10,13 +10,14 @@ pub use safetensors::SafeTensors;
 pub use safetensors::serialize;
 
 mod embeddings;
+mod metal;
 mod model;
 
 static KERNELS_METALLIB: &[u8] = include_bytes!("kernels/kernels.metallib");
 
 fn main() {
-    // Create the system default Metal device
-    let device = MTLCreateSystemDefaultDevice().expect("no Metal device found");
+    // TODO: Panics.
+    let device = metal::setup_device().unwrap();
     println!("device: {:?}", device.name());
 
     // Load the compiled metallib
