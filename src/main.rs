@@ -98,7 +98,7 @@ fn main() {
         }
         metal::CommandQueue::Metal4(cq) => {
             panic!("Unimplemented")
-        } // metal::CommandQueue::Metal4(cq) => cq     };
+        }
     };
 
     // Read back results
