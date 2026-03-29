@@ -1,14 +1,11 @@
 use dispatch2::DispatchData;
 use objc2::{rc::Retained, runtime::ProtocolObject};
-use objc2_foundation::{
-    NSError, NSObjectNSKeyValueCoding, NSString,
-    NSUbiquitousUserDefaultsCompletedInitialSyncNotification,
-};
+use objc2_foundation::{NSError, NSString};
 use objc2_metal::{
-    MTL4CommandQueue, MTLCommandQueue, MTLComputePipelineState, MTLCreateSystemDefaultDevice,
-    MTLDevice, MTLFunction, MTLGPUFamily, MTLLibrary,
+    MTL4CommandQueue, MTLBuffer, MTLCommandQueue, MTLComputePipelineState,
+    MTLCreateSystemDefaultDevice, MTLDevice, MTLGPUFamily, MTLLibrary, MTLResourceOptions,
 };
-use std::{collections::HashMap, fs::File, io::Read, ops::Deref};
+use std::{collections::HashMap, ffi::c_void, fs::File, io::Read, ptr::NonNull};
 
 use crate::metal;
 
@@ -23,8 +20,9 @@ pub enum MetalGPUError {
     NSError(Retained<NSError>),
     DeviceError(String),
     FunctionError(String),
-    DuplicateKeyError(String),
+    KeyError(String),
     CommandQueueCreationError(String),
+    BufferCreationError(String),
 }
 
 impl std::fmt::Display for MetalGPUError {
@@ -34,8 +32,11 @@ impl std::fmt::Display for MetalGPUError {
             MetalGPUError::NSError(retained) => retained.fmt(f),
             MetalGPUError::DeviceError(err_str) => write!(f, "DeviceError: {}", err_str),
             MetalGPUError::FunctionError(err_str) => write!(f, "FunctionError: {}", err_str),
-            MetalGPUError::DuplicateKeyError(err_str) => {
-                write!(f, "DuplicateKeyError: {}", err_str)
+            MetalGPUError::BufferCreationError(err_str) => {
+                write!(f, "BufferCreationError: {}", err_str)
+            }
+            MetalGPUError::KeyError(err_str) => {
+                write!(f, "KeyError: {}", err_str)
             }
             MetalGPUError::CommandQueueCreationError(err_str) => {
                 write!(f, "CommandQueueCreationError: {}", err_str)
@@ -56,7 +57,7 @@ impl From<Retained<NSError>> for MetalGPUError {
 }
 
 // Capturing hardware variance. Queues enable instruction pipelining.
-enum CommandQueue {
+pub enum CommandQueue {
     Metal(Retained<ProtocolObject<dyn MTLCommandQueue>>),
     Metal4(Retained<ProtocolObject<dyn MTL4CommandQueue>>),
 }
@@ -85,8 +86,8 @@ impl MetalGPU {
     // error.
     pub fn load_kernel_file(
         &self,
-        filename: String,
-        libname: String,
+        filename: &String,
+        libname: &String,
     ) -> Result<Retained<ProtocolObject<dyn MTLComputePipelineState>>, MetalGPUError> {
         let mut buffer = Vec::new();
         let mut file = File::open(filename)?;
@@ -106,16 +107,23 @@ impl MetalGPU {
         Ok(function)
     }
 
-    // new_command_queue instantiates a command queue, which is
-    // Metal 4 aware.
-    pub fn new_command_queue(&mut self, name: String) -> Result<(), MetalGPUError> {
+    // new_command_queue instantiates a command queue, which is Metal 4 aware.
+    // Coerce forcing enabling or disabling metal4 support via metal4 argument.
+    pub fn new_command_queue(
+        &mut self,
+        name: String,
+        metal4: Option<bool>,
+    ) -> Result<(), MetalGPUError> {
         // Check whether the queue already exists, if so error.
         if self.queues.contains_key(&name) {
-            return Err(MetalGPUError::DuplicateKeyError(format!("Key {}", name)));
+            return Err(MetalGPUError::KeyError(format!("Key {}", name)));
         }
 
+        // If metal4 is not set, default to device capabilities, preferring metal4.
+        let metal4_supported = metal4.map_or(self.metal4_supported, |x| x);
+
         // Create a command queue based on supported hardware features.
-        let queue = if self.metal4_supported {
+        let queue = if metal4_supported {
             self.device
                 .newMTL4CommandQueue()
                 .map(|q| CommandQueue::Metal4(q))
@@ -128,5 +136,43 @@ impl MetalGPU {
             .ok_or_else(|| MetalGPUError::CommandQueueCreationError(format!("Key {}", name)))?;
         self.queues.insert(name, queue);
         Ok(())
+    }
+
+    pub fn get_command_queue(&self, name: &String) -> Result<&CommandQueue, MetalGPUError> {
+        self.queues.get(name).ok_or(MetalGPUError::KeyError(format!(
+            "Key {} does not exist",
+            name
+        )))
+    }
+
+    pub unsafe fn new_buffer_from_bytes(
+        &self,
+        pointer: NonNull<c_void>,
+        length: usize,
+        options: MTLResourceOptions,
+    ) -> Result<Retained<ProtocolObject<dyn MTLBuffer>>, MetalGPUError> {
+        let buf = unsafe {
+            self.device
+                .newBufferWithBytes_length_options(pointer, length, options)
+        };
+        buf.ok_or(MetalGPUError::BufferCreationError(format!(
+            "Unable to create buffer from {:?} of length {:?} with options {:?}",
+            pointer.addr().get(),
+            length,
+            options
+        )))
+    }
+
+    pub fn new_buffer(
+        &self,
+        length: usize,
+        options: MTLResourceOptions,
+    ) -> Result<Retained<ProtocolObject<dyn MTLBuffer>>, MetalGPUError> {
+        self.device
+            .newBufferWithLength_options(length, options)
+            .ok_or(MetalGPUError::BufferCreationError(format!(
+                "Unable to create buffer of length {:?} with options {:?}",
+                length, options
+            )))
     }
 }
