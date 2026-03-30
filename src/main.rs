@@ -1,9 +1,10 @@
 use crate::metal::MetalGPU;
+use block2::RcBlock;
+use dispatch2::DispatchObject;
+use dispatch2::DispatchSemaphore;
+use dispatch2::DispatchTime;
 use memmap2::MmapOptions;
-use objc2::rc::Retained;
-use objc2::runtime::MessageReceiver;
 use objc2::runtime::ProtocolObject;
-use objc2_foundation::NSObjectProtocol;
 use objc2_metal::*;
 use std::fs::File;
 use std::ptr::NonNull;
@@ -18,7 +19,7 @@ mod model;
 fn main() {
     let mut gpu = MetalGPU::new_metal_gpu().unwrap();
     let queue_name = String::from("first");
-    gpu.new_command_queue(&queue_name, Some(false)).unwrap();
+    gpu.new_command_queue(&queue_name, Some(true)).unwrap();
 
     println!("device: {:?}", gpu.device.name());
     println!("metal4 supported: {:?}", gpu.metal4_supported);
@@ -97,13 +98,60 @@ fn main() {
             println!("Completed.");
         }
         metal::CommandQueue::Metal4(cq) => {
-            panic!("Unimplemented")
+            let allocator = gpu.device.newCommandAllocator().unwrap();
+            let command_buffer = gpu.device.newCommandBuffer().unwrap();
+            command_buffer.beginCommandBufferWithAllocator(&allocator);
+
+            let arg_desc = MTL4ArgumentTableDescriptor::new();
+            arg_desc.setMaxBufferBindCount(3);
+            let argument_table = gpu
+                .device
+                .newArgumentTableWithDescriptor_error(&arg_desc)
+                .unwrap();
+            unsafe {
+                argument_table.setAddress_atIndex(input_buffer.gpuAddress(), 0);
+                argument_table.setAddress_atIndex(output_buffer.gpuAddress(), 1);
+                argument_table.setAddress_atIndex(scale_buffer.gpuAddress(), 2);
+            }
+
+            let command_encoder = command_buffer.computeCommandEncoder().unwrap();
+            command_encoder.setComputePipelineState(&scale_tensor);
+            command_encoder.setArgumentTable(Some(&argument_table));
+            command_encoder.dispatchThreadgroups_threadsPerThreadgroup(grid_size, threadgroup_size);
+            command_encoder.endEncoding();
+
+            command_buffer.endCommandBuffer();
+
+            let mut command_buffers = [NonNull::from(&*command_buffer)];
+            let command_buffers_ptr = NonNull::new(command_buffers.as_mut_ptr()).unwrap();
+
+            let options = MTL4CommitOptions::new();
+            let sem = DispatchSemaphore::new(0);
+            let sem_clone = sem.retain();
+            let callback =
+                block2::RcBlock::new(move |x: NonNull<ProtocolObject<dyn MTL4CommitFeedback>>| {
+                    let feedback = unsafe { x.as_ref() };
+                    println!(
+                        "Committed: start {:?}, end {:?}, diff {:?}",
+                        feedback.GPUStartTime(),
+                        feedback.GPUEndTime(),
+                        feedback.GPUEndTime() - feedback.GPUStartTime(),
+                    );
+                    sem_clone.signal();
+                });
+
+            unsafe {
+                options.addFeedbackHandler(RcBlock::as_ptr(&callback));
+                cq.commit_count_options(command_buffers_ptr, 1, &options);
+            }
+
+            // Block until semaphore is done.
+            sem.try_acquire(DispatchTime::FOREVER).unwrap();
         }
     };
 
     // Read back results
     let output_ptr = output_buffer.contents().as_ptr() as *const f32;
-
     let output: Vec<f32>;
     unsafe {
         output = std::slice::from_raw_parts(output_ptr, count).to_vec();
@@ -114,7 +162,7 @@ fn main() {
     println!("output: {:?}", output);
 
     // Read safetensors.
-    let file = File::open("./models/LFM2.5-1.2B-Thinking/model.safetensors").unwrap();
+    let file = File::open("./models/TinyMistral-248M-v3/model.safetensors").unwrap();
     let buffer = unsafe { MmapOptions::new().map(&file).unwrap() };
     let tensors = SafeTensors::deserialize(&buffer).unwrap();
     let names = tensors.names();
